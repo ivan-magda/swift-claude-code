@@ -4,6 +4,8 @@ Exploring the architecture of coding agents by rebuilding a Claude Code-style CL
 
 > **Current progress:** Stage 02 of 12 — tool dispatch with `read_file`, `write_file`, `edit_file`
 
+![demo](demo.gif)
+
 ## Why This Exists
 
 Claude Code feels unusually effective compared to other coding agents, and I suspect most of it comes from architectural restraint rather than architectural complexity. I studied the tool surface, traced the interaction loop, and tried to isolate which design choices actually matter.
