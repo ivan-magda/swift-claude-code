@@ -1,40 +1,30 @@
 # swift-claude-code
 
-Building a simplified Claude Code-like CLI agent from scratch in Swift.
+Exploring the architecture of coding agents by rebuilding a Claude Code-style CLI from scratch in Swift.
 
 > **Current progress:** Stage 02 of 12 — tool dispatch with `read_file`, `write_file`, `edit_file`
 
 ## Why This Exists
 
-If you've used Claude Code, you know exactly what I'm talking about. Especially the first time you use it — it's just _different_ than any other coding agent out there. There's definitely some magic behind Claude Code, and I went down a huge rabbit hole trying to figure out what makes it special.
+Claude Code feels unusually effective compared to other coding agents, and I suspect most of it comes from architectural restraint rather than architectural complexity. I studied the tool surface, traced the interaction loop, and tried to isolate which design choices actually matter.
 
-My hypothesis: **Claude Code is so good because of how simple it is.**
+My working theory: **coding agents benefit more from a small set of excellent tools and tight loop design than from large orchestration layers.**
 
-Not the UI — the architecture. Down to the fact that it doesn't really have many tools. And the tools it does have are really simple: a search tool, a file editing tool. That's about it. But those tools are _really, really good_.
+Claude Code doesn't have many tools. The tools it does have are simple: a search tool, a file editing tool. But those tools are really good. And the system leans on the model far more than most agent implementations — less scaffolding, more trust in the LLM to do the heavy lifting.
 
-The other big thing is that Claude Code relies on the model way more than other tools. Most people build a lot of scaffolding around the model, but Claude Code really lets the model do all of the heavy lifting.
+This project tests that idea by rebuilding the core mechanics from scratch in Swift, one stage at a time, to see how little architecture you actually need.
 
-So I wanted to understand this deeply — not by reading about it, but by building it. This project rebuilds the core agent loop from scratch in Swift, one layer at a time, to see exactly how few moving parts you actually need.
+## Hypothesis
 
-## Architecture
+This project tests a few specific ideas about coding agents:
 
-Two-target Swift Package Manager project:
+- A small number of high-quality tools beats a large tool catalog
+- The model should do most of the heavy lifting — thin orchestration, not thick
+- Explicit task state improves reliability more than prompt-only planning
+- Controlled context injection matters more than persistent memory
+- Context compaction is a product feature, not just a token optimization
 
-```
-swift-claude-code/
-├── Package.swift
-├── Sources/
-│   ├── Core/                ← library (all logic)
-│   │   ├── API/
-│   │   ├── Agent.swift      agent loop + tool dispatch
-│   │   └── ShellExecutor.swift
-│   └── cli/                 ← executable (@main entry point)
-└── Tests/CoreTests/
-```
-
-**Core** is the library — API client, shell executor, agent loop, tools, everything testable. **cli** is just the entry point. The executable is called `claude`.
-
-Raw HTTP to `POST https://api.anthropic.com/v1/messages` using [AsyncHTTPClient](https://github.com/swift-server/async-http-client). Works on both macOS and Linux.
+Each stage is designed to isolate one mechanism and see what it enables.
 
 ## The Agent Loop
 
@@ -67,27 +57,75 @@ func run(query: String) async throws -> String {
 }
 ```
 
-That's it. The loop is the invariant. Tools are the variable. Every stage adds entries to the tool handler dictionary and injection points before the API call, but the loop body itself never changes.
+The loop is the invariant. Tools are the variable. Every stage adds entries to the tool handler dictionary and injection points before the API call, but the loop body itself never changes.
 
 ## Roadmap
 
-Each stage adds one mechanism on top of the previous one. Progress is tracked via git tags.
+Progress is tracked via git tags. The roadmap is split into three phases — core mechanics first, then product-level features, then experimental multi-agent systems.
+
+### Phase 1 — Core Loop
+
+The minimum viable agent: a loop and a small set of good tools.
 
 | Stage  | What It Adds                                                           | Tag                |
 | ------ | ---------------------------------------------------------------------- | ------------------ |
-| **00** | Bootstrap: SPM project                                                 | `00-bootstrap`     |
+| **00** | Bootstrap: SPM project, two-target layout, CI                          | `00-bootstrap`     |
 | **01** | Agent loop + bash tool                                                 | `01-agent-loop`    |
 | **02** | Tool dispatch: `read_file`, `write_file`, `edit_file` with path safety | `02-tool-dispatch` |
-| 03     | TodoWrite: Codable todo tracking with nag reminder injection           | —                  |
-| 04     | Subagents: recursive `agentLoop()` with fresh messages                 | —                  |
-| 05     | Skill loading: read `.md` files from disk, inject as tool results      | —                  |
-| 06     | Context compaction: 3-layer strategy (micro, auto, manual)             | —                  |
-| 07     | Task system: file-based CRUD with dependency DAG                       | —                  |
-| 08     | Background tasks: `Task {}` + actor-based notification queue           | —                  |
-| 09     | Agent teams: JSONL mailbox files + actor coordination                  | —                  |
-| 10     | Team protocols: request-response with correlation IDs                  | —                  |
-| 11     | Autonomous agents: idle-poll-claim cycle                               | —                  |
-| 12     | Worktree isolation: `git worktree` via Process                         | —                  |
+| 03     | Todo tracking with nag reminder injection                              | —                  |
+
+### Phase 2 — Product Mechanics
+
+The features that make an agent feel like a usable product: context, memory management, and persistence.
+
+| Stage | What It Adds                                                 | Tag |
+| ----- | ------------------------------------------------------------ | --- |
+| 04    | Subagents: recursive loop with fresh context                 | —   |
+| 05    | Skill loading: `.md` files injected as tool results          | —   |
+| 06    | Context compaction: 3-layer strategy (micro, auto, manual)   | —   |
+| 07    | Task system: file-based CRUD with dependency DAG             | —   |
+| 08    | Background tasks: `Task {}` + actor-based notification queue | —   |
+
+### Phase 3 — Experimental
+
+Multi-agent coordination. These stages explore ideas beyond the core product loop.
+
+| Stage | What It Adds                                          | Tag |
+| ----- | ----------------------------------------------------- | --- |
+| 09    | Agent teams: JSONL mailbox + actor coordination       | —   |
+| 10    | Team protocols: request-response with correlation IDs | —   |
+| 11    | Autonomous agents: idle-poll-claim cycle              | —   |
+| 12    | Worktree isolation: `git worktree` via Process        | —   |
+
+## Architecture
+
+Two-target Swift Package Manager project:
+
+```
+swift-claude-code/
+├── Package.swift
+├── Sources/
+│   ├── Core/                ← library (all logic)
+│   │   ├── API/
+│   │   ├── Agent.swift      agent loop + tool dispatch
+│   │   └── ShellExecutor.swift
+│   └── cli/                 ← executable (@main entry point)
+└── Tests/CoreTests/
+```
+
+**Core** is the library — API client, shell executor, agent loop, tools, everything testable. **cli** is just the entry point. The executable is called `claude`.
+
+Raw HTTP to `POST https://api.anthropic.com/v1/messages` using [AsyncHTTPClient](https://github.com/swift-server/async-http-client). Works on both macOS and Linux.
+
+## Non-Goals
+
+This project is **not**:
+
+- A full Claude Code clone or drop-in replacement
+- A general-purpose multi-agent framework
+- Production-ready IDE tooling
+
+It's a staged exploration of coding-agent architecture — intentionally minimal, intentionally incomplete.
 
 ## Tech Stack
 
