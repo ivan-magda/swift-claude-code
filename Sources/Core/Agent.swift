@@ -1,7 +1,7 @@
 import Foundation
 
 public final class Agent {
-  public static let version = "0.1.0"
+  public static let version = "0.2.0"
 
   private let apiClient: any APIClientProtocol
   private let model: String
