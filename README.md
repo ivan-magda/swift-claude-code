@@ -2,7 +2,7 @@
 
 Exploring the architecture of coding agents by rebuilding a Claude Code-style CLI from scratch in Swift.
 
-> **Current progress:** Stage 02 of 12 — tool dispatch with `read_file`, `write_file`, `edit_file`
+> **Current progress:** Stage 03 of 12 — todo tracking with nag reminder injection
 
 ![demo](demo.gif)
 
@@ -74,7 +74,7 @@ The minimum viable agent: a loop and a small set of good tools.
 | **00** | Bootstrap: SPM project, two-target layout, CI                          | `00-bootstrap`     |
 | **01** | Agent loop + bash tool                                                 | `01-agent-loop`    |
 | **02** | Tool dispatch: `read_file`, `write_file`, `edit_file` with path safety | `02-tool-dispatch` |
-| 03     | Todo tracking with nag reminder injection                              | —                  |
+| **03** | Todo tracking with nag reminder injection                              | `03-todo-write`    |
 
 ### Phase 2 — Product Mechanics
 

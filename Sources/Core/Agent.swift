@@ -1,13 +1,18 @@
 import Foundation
 
 public final class Agent {
-  public static let version = "0.2.0"
+  public static let version = "0.3.0"
+
+  private static let todoReminderThreshold = 3
 
   private let apiClient: any APIClientProtocol
   private let model: String
   private let systemPrompt: String
   private let workingDirectory: String
+
   private let shellExecutor: ShellExecutor
+  private let todoManager = TodoManager()
+
   private var messages: [Message] = []
 
   public init(
@@ -27,6 +32,7 @@ public final class Agent {
 
   public func run(query: String) async throws -> String {
     messages.append(.user(query))
+    var turnsWithoutTodo = 0
 
     while true {
       let request = APIRequest(
@@ -51,10 +57,16 @@ public final class Agent {
       }
 
       var results: [ContentBlock] = []
+      var didUseTodo = false
+
       for block in response.content {
         if case .toolUse(let id, let name, let input) = block {
           printToolCall(name: name, input: input)
           let toolResult = await executeTool(name: name, input: input)
+
+          if name == "todo" {
+            didUseTodo = true
+          }
 
           switch toolResult {
           case .success(let output):
@@ -68,6 +80,11 @@ public final class Agent {
         }
       }
 
+      turnsWithoutTodo = didUseTodo ? 0 : turnsWithoutTodo + 1
+      if turnsWithoutTodo >= Self.todoReminderThreshold && todoManager.hasOpenItems() {
+        results.append(.text("Update your todos."))
+      }
+
       messages.append(Message(role: .user, content: results))
     }
   }
@@ -79,6 +96,7 @@ public final class Agent {
 
     - Prefer read_file/write_file/edit_file over bash for file operations
     - Always check tool results before proceeding
+    - Use the todo tool to plan multi-step tasks. Mark in_progress before starting, completed when done.
     """
   }
 }
@@ -164,6 +182,31 @@ extension Agent {
         ]),
         "required": .array(["path", "old_text", "new_text"])
       ])
+    ),
+    ToolDefinition(
+      name: "todo",
+      description: "Update task list. Track progress on multi-step tasks.",
+      inputSchema: .object([
+        "type": "object",
+        "properties": .object([
+          "items": .object([
+            "type": "array",
+            "items": .object([
+              "type": "object",
+              "properties": .object([
+                "id": .object(["type": "string"]),
+                "text": .object(["type": "string"]),
+                "status": .object([
+                  "type": "string",
+                  "enum": .array(["pending", "in_progress", "completed"])
+                ])
+              ]),
+              "required": .array(["id", "text", "status"])
+            ])
+          ])
+        ]),
+        "required": .array(["items"])
+      ])
     )
   ]
 
@@ -172,7 +215,8 @@ extension Agent {
       "bash": executeBash,
       "read_file": executeReadFile,
       "write_file": executeWriteFile,
-      "edit_file": executeEditFile
+      "edit_file": executeEditFile,
+      "todo": executeTodo
     ]
 
     guard let handler = handlers[name] else {
@@ -291,6 +335,36 @@ extension Agent {
       } catch {
         return .failure(.executionFailed("\(error)"))
       }
+    }
+  }
+
+  private func executeTodo(_ input: JSONValue) async -> Result<String, ToolError> {
+    guard let itemsArray = input["items"]?.arrayValue else {
+      return .failure(.missingParameter("items"))
+    }
+
+    var todoItems: [TodoItem] = []
+    for element in itemsArray {
+      guard let id = element["id"]?.stringValue else {
+        return .failure(.missingParameter("items[].id"))
+      }
+      guard let text = element["text"]?.stringValue else {
+        return .failure(.missingParameter("items[].text"))
+      }
+      guard let statusString = element["status"]?.stringValue else {
+        return .failure(.missingParameter("items[].status"))
+      }
+      guard let status = TodoStatus(rawValue: statusString) else {
+        return .failure(.executionFailed("Invalid status '\(statusString)' for item \(id)"))
+      }
+      todoItems.append(TodoItem(id: id, text: text, status: status))
+    }
+
+    do {
+      try todoManager.update(items: todoItems)
+      return .success(todoManager.render())
+    } catch {
+      return .failure(.executionFailed("\(error)"))
     }
   }
 

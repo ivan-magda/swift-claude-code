@@ -52,6 +52,11 @@ struct JSONValueTests {
     #expect(value == .null)
   }
 
+  @Test func arrayValue() {
+    #expect(JSONValue.array(["a", "b"]).arrayValue == [.string("a"), .string("b")])
+    #expect(JSONValue.string("hello").arrayValue == nil)
+  }
+
   @Test func intValue() {
     #expect(JSONValue.int(42).intValue == 42)
     #expect(JSONValue.double(3.9).intValue == 3)
