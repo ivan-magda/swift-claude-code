@@ -8,6 +8,9 @@ public protocol APIClientProtocol {
 }
 
 public struct APIClient: APIClientProtocol, Sendable {
+  private static let requestTimeout = TimeAmount.seconds(300)
+  private static let maxResponseBodySize = 10 * 1024 * 1024
+
   private let apiKey: String
   private let baseURL: String
   private let httpClient: HTTPClient
@@ -32,8 +35,8 @@ public struct APIClient: APIClientProtocol, Sendable {
     httpRequest.headers.add(name: "content-type", value: "application/json")
     httpRequest.body = .bytes(ByteBuffer(data: body))
 
-    let response = try await httpClient.execute(httpRequest, timeout: .seconds(300))
-    let responseBody = try await response.body.collect(upTo: 10 * 1024 * 1024)
+    let response = try await httpClient.execute(httpRequest, timeout: Self.requestTimeout)
+    let responseBody = try await response.body.collect(upTo: Self.maxResponseBodySize)
     let data = Data(buffer: responseBody)
 
     guard (200..<300).contains(Int(response.status.code)) else {

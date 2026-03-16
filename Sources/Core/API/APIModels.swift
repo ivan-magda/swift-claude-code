@@ -172,7 +172,7 @@ public struct APIRequest: Codable, Sendable {
 
   public init(
     model: String,
-    maxTokens: Int = 4096,
+    maxTokens: Int = Limits.defaultMaxTokens,
     system: String? = nil,
     messages: [Message],
     tools: [ToolDefinition]? = nil

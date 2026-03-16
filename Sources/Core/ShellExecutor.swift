@@ -16,8 +16,8 @@ public struct ShellResult: Sendable {
       output += "\n[exit code: \(exitCode)]"
     }
 
-    if output.count > 50_000 {
-      output = String(output.prefix(50_000))
+    if output.count > Limits.maxOutputSize {
+      output = String(output.prefix(Limits.maxOutputSize))
     }
 
     return output.isEmpty ? "(no output)" : output

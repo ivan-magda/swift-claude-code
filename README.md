@@ -2,7 +2,7 @@
 
 Exploring the architecture of coding agents by rebuilding a Claude Code-style CLI from scratch in Swift.
 
-> **Current progress:** Stage 03 of 12 — todo tracking with nag reminder injection
+> **Current progress:** Stage 04 of 12 — subagents with recursive loop and fresh context
 
 ![demo](demo.gif)
 
@@ -80,13 +80,13 @@ The minimum viable agent: a loop and a small set of good tools.
 
 The features that make an agent feel like a usable product: context, memory management, and persistence.
 
-| Stage | What It Adds                                                 | Tag |
-| ----- | ------------------------------------------------------------ | --- |
-| 04    | Subagents: recursive loop with fresh context                 | —   |
-| 05    | Skill loading: `.md` files injected as tool results          | —   |
-| 06    | Context compaction: 3-layer strategy (micro, auto, manual)   | —   |
-| 07    | Task system: file-based CRUD with dependency DAG             | —   |
-| 08    | Background tasks: `Task {}` + actor-based notification queue | —   |
+| Stage  | What It Adds                                                 | Tag            |
+| ------ | ------------------------------------------------------------ | -------------- |
+| **04** | Subagents: recursive loop with fresh context                 | `04-subagents` |
+| 05     | Skill loading: `.md` files injected as tool results          | —              |
+| 06     | Context compaction: 3-layer strategy (micro, auto, manual)   | —              |
+| 07     | Task system: file-based CRUD with dependency DAG             | —              |
+| 08     | Background tasks: `Task {}` + actor-based notification queue | —              |
 
 ### Phase 3 — Experimental
 

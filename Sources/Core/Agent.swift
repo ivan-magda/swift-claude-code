@@ -1,8 +1,14 @@
 // swiftlint:disable file_length
 import Foundation
 
+public enum Limits {
+  public static let maxOutputSize = 50_000
+  public static let defaultMaxTokens = 4096
+  static let logPreviewLength = 200
+}
+
 public final class Agent {
-  public static let version = "0.3.0"
+  public static let version = "0.4.0"
 
   private static let todoReminderThreshold = 3
 
@@ -33,60 +39,69 @@ public final class Agent {
 
   public func run(query: String) async throws -> String {
     messages.append(.user(query))
+
+    let result = try await agentLoop(initialMessages: messages, config: .default)
+    messages = result.messages
+
+    return result.text
+  }
+
+  private func agentLoop(
+    initialMessages: [Message],
+    config: LoopConfig
+  ) async throws -> (text: String, messages: [Message]) {
+    var messages = initialMessages
     var turnsWithoutTodo = 0
+    var iteration = 0
+    var lastAssistantText = ""
+
+    let allowedTools = Set(config.tools.map(\.name))
 
     while true {
+      try Task.checkCancellation()
+
+      iteration += 1
+      if iteration > config.maxIterations {
+        return (lastAssistantText + "\n(\(config.label) reached iteration limit)", messages)
+      }
+
       let request = APIRequest(
         model: model,
-        maxTokens: 4096,
+        maxTokens: Limits.defaultMaxTokens,
         system: systemPrompt,
         messages: messages,
-        tools: Self.toolDefinitions
+        tools: config.tools
       )
 
       let response = try await apiClient.createMessage(request: request)
       messages.append(Message(role: .assistant, content: response.content))
+      lastAssistantText = response.content.textContent
 
       for block in response.content {
         if case .text(let text) = block {
-          print("\(ANSIColor.cyan)\(text)\(ANSIColor.reset)")
+          print("[\(config.label)] \(ANSIColor.cyan)\(text)\(ANSIColor.reset)")
         }
       }
 
       guard response.stopReason == .toolUse else {
-        return response.content.textContent
+        return (response.content.textContent, messages)
       }
 
-      var results: [ContentBlock] = []
-      var didUseTodo = false
+      let (results, didUseTodo) = await processToolUses(
+        response: response,
+        allowedTools: allowedTools,
+        label: config.label
+      )
 
-      for block in response.content {
-        if case .toolUse(let id, let name, let input) = block {
-          printToolCall(name: name, input: input)
-          let toolResult = await executeTool(name: name, input: input)
-
-          if name == "todo" {
-            didUseTodo = true
-          }
-
-          switch toolResult {
-          case .success(let output):
-            print("\(ANSIColor.dim)\(String(output.prefix(200)))\(ANSIColor.reset)")
-            results.append(.toolResult(toolUseId: id, content: output, isError: false))
-          case .failure(let error):
-            let message = "\(error)"
-            print("\(ANSIColor.red)\(message)\(ANSIColor.reset)")
-            results.append(.toolResult(toolUseId: id, content: message, isError: true))
-          }
+      var toolResults = results
+      if config.enableNag {
+        turnsWithoutTodo = didUseTodo ? 0 : turnsWithoutTodo + 1
+        if turnsWithoutTodo >= Self.todoReminderThreshold && todoManager.hasOpenItems() {
+          toolResults.append(.text("Update your todos."))
         }
       }
 
-      turnsWithoutTodo = didUseTodo ? 0 : turnsWithoutTodo + 1
-      if turnsWithoutTodo >= Self.todoReminderThreshold && todoManager.hasOpenItems() {
-        results.append(.text("Update your todos."))
-      }
-
-      messages.append(Message(role: .user, content: results))
+      messages.append(Message(role: .user, content: toolResults))
     }
   }
 
@@ -208,6 +223,20 @@ extension Agent {
         ]),
         "required": .array(["items"])
       ])
+    ),
+    ToolDefinition(
+      name: "agent",
+      description: "Spawn a subagent to handle a complex subtask independently.",
+      inputSchema: .object([
+        "type": "object",
+        "properties": .object([
+          "prompt": .object([
+            "type": "string",
+            "description": "The task for the subagent to complete"
+          ])
+        ]),
+        "required": .array(["prompt"])
+      ])
     )
   ]
 
@@ -217,7 +246,8 @@ extension Agent {
       "read_file": executeReadFile,
       "write_file": executeWriteFile,
       "edit_file": executeEditFile,
-      "todo": executeTodo
+      "todo": executeTodo,
+      "agent": executeAgent
     ]
 
     guard let handler = handlers[name] else {
@@ -265,8 +295,8 @@ extension Agent {
           output = text
         }
 
-        if output.count > 50_000 {
-          output = String(output.prefix(50_000))
+        if output.count > Limits.maxOutputSize {
+          output = String(output.prefix(Limits.maxOutputSize))
         }
 
         return .success(output)
@@ -339,6 +369,30 @@ extension Agent {
     }
   }
 
+  private func executeAgent(_ input: JSONValue) async -> Result<String, ToolError> {
+    guard let prompt = input["prompt"]?.stringValue else {
+      return .failure(.missingParameter("prompt"))
+    }
+
+    do {
+      let result = try await agentLoop(
+        initialMessages: [Message.user(prompt)],
+        config: .subagent
+      )
+      var output = result.text
+
+      if output.isEmpty {
+        output = "(no output)"
+      } else if output.count > Limits.maxOutputSize {
+        output = String(output.prefix(Limits.maxOutputSize))
+      }
+
+      return .success(output)
+    } catch {
+      return .failure(.executionFailed("Subagent failed: \(error)"))
+    }
+  }
+
   private func executeTodo(_ input: JSONValue) async -> Result<String, ToolError> {
     guard let itemsArray = input["items"]?.arrayValue else {
       return .failure(.missingParameter("items"))
@@ -371,6 +425,43 @@ extension Agent {
 
   // MARK: Helpers
 
+  private func processToolUses(
+    response: APIResponse,
+    allowedTools: Set<String>,
+    label: String
+  ) async -> (results: [ContentBlock], didUseTodo: Bool) {
+    var results: [ContentBlock] = []
+    var didUseTodo = false
+
+    for case .toolUse(let id, let name, let input) in response.content {
+      guard allowedTools.contains(name) else {
+        let message = "Tool '\(name)' is not allowed in this context"
+        print("[\(label)] \(ANSIColor.red)\(message)\(ANSIColor.reset)")
+        results.append(.toolResult(toolUseId: id, content: message, isError: true))
+        continue
+      }
+
+      printToolCall(name: name, input: input, label: label)
+      let toolResult = await executeTool(name: name, input: input)
+
+      if name == "todo" {
+        didUseTodo = true
+      }
+
+      switch toolResult {
+      case .success(let output):
+        print("[\(label)] \(ANSIColor.dim)\(String(output.prefix(Limits.logPreviewLength)))\(ANSIColor.reset)")
+        results.append(.toolResult(toolUseId: id, content: output, isError: false))
+      case .failure(let error):
+        let message = "\(error)"
+        print("[\(label)] \(ANSIColor.red)\(message)\(ANSIColor.reset)")
+        results.append(.toolResult(toolUseId: id, content: message, isError: true))
+      }
+    }
+
+    return (results, didUseTodo)
+  }
+
   private func resolveSafePath(_ relativePath: String) -> Result<String, ToolError> {
     let workDirURL = URL(fileURLWithPath: workingDirectory, isDirectory: true)
     let resolvedWorkDir = workDirURL.standardized
@@ -391,13 +482,38 @@ extension Agent {
     return .success(fullURL.path)
   }
 
-  private func printToolCall(name: String, input: JSONValue) {
+  private func printToolCall(name: String, input: JSONValue, label: String) {
     if name == "bash", let command = input["command"]?.stringValue {
-      print("\(ANSIColor.yellow)$ \(command)\(ANSIColor.reset)")
+      print("[\(label)] \(ANSIColor.yellow)$ \(command)\(ANSIColor.reset)")
     } else if let path = input["path"]?.stringValue {
-      print("\(ANSIColor.yellow)> \(name): \(path)\(ANSIColor.reset)")
+      print("[\(label)] \(ANSIColor.yellow)> \(name): \(path)\(ANSIColor.reset)")
     } else {
-      print("\(ANSIColor.yellow)> \(name)\(ANSIColor.reset)")
+      print("[\(label)] \(ANSIColor.yellow)> \(name)\(ANSIColor.reset)")
     }
+  }
+}
+
+// MARK: - Configuration
+
+extension Agent {
+  fileprivate struct LoopConfig {
+    let tools: [ToolDefinition]
+    let maxIterations: Int
+    let enableNag: Bool
+    let label: String
+
+    static let `default` = LoopConfig(
+      tools: Agent.toolDefinitions,
+      maxIterations: .max,
+      enableNag: true,
+      label: "agent"
+    )
+
+    static let subagent = LoopConfig(
+      tools: Agent.toolDefinitions.filter { $0.name != "agent" && $0.name != "todo" },
+      maxIterations: 30,
+      enableNag: false,
+      label: "subagent"
+    )
   }
 }

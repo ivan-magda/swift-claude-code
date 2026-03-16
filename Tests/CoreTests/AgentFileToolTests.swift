@@ -74,7 +74,7 @@ struct ReadFileToolTests {
     )
     let output = try result.get()
 
-    #expect(output.count == 50_000)
+    #expect(output.count == Limits.maxOutputSize)
   }
 
   @Test func fileNotFound() async throws {

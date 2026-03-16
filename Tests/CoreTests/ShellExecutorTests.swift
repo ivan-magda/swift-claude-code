@@ -31,7 +31,7 @@ struct ShellResultFormattedTests {
   @Test func truncatesLargeOutput() {
     let large = String(repeating: "x", count: 60_000)
     let result = ShellResult(stdout: large, stderr: "", exitCode: 0)
-    #expect(result.formatted.count == 50_000)
+    #expect(result.formatted.count == Limits.maxOutputSize)
   }
 }
 
@@ -39,23 +39,10 @@ struct ShellResultFormattedTests {
 
 @Suite("ShellExecutor dangerous command blocking")
 struct DangerousCommandTests {
-  @Test func blocksSudo() async throws {
+  @Test(arguments: ["sudo rm -rf /tmp/test", "rm -rf /", "shutdown -h now"])
+  func blocksDangerousCommands(command: String) async throws {
     let executor = ShellExecutor()
-    let result = try await executor.execute("sudo rm -rf /tmp/test")
-    #expect(result.exitCode == 1)
-    #expect(result.stderr.contains("Dangerous command blocked"))
-  }
-
-  @Test func blocksRmRfRoot() async throws {
-    let executor = ShellExecutor()
-    let result = try await executor.execute("rm -rf /")
-    #expect(result.exitCode == 1)
-    #expect(result.stderr.contains("Dangerous command blocked"))
-  }
-
-  @Test func blocksShutdown() async throws {
-    let executor = ShellExecutor()
-    let result = try await executor.execute("shutdown -h now")
+    let result = try await executor.execute(command)
     #expect(result.exitCode == 1)
     #expect(result.stderr.contains("Dangerous command blocked"))
   }
