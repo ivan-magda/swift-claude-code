@@ -40,3 +40,6 @@ CLAUDE.md
 
 # Test results
 tests/results/
+
+# ralphex progress logs
+.ralphex/progress/
