@@ -35,7 +35,8 @@ fastlane/test_output
 .env
 
 # Documentation
-docs/
+docs/*
+!docs/s0[0-8].md
 CLAUDE.md
 
 # Test results
