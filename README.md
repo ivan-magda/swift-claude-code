@@ -4,6 +4,12 @@ Exploring the architecture of coding agents by rebuilding a Claude Code-style CL
 
 ![demo](demo.gif)
 
+## Learning Series
+
+A complete 9-part learning series is available on [ivanmagda.dev](https://ivanmagda.dev).
+
+[Start the series →](https://ivanmagda.dev/posts/s00-bootstrapping-the-project)
+
 ## Why This Exists
 
 Claude Code feels unusually effective compared to other coding agents, and I suspect most of it comes from architectural restraint rather than architectural complexity. I studied the tool surface, traced the interaction loop, and tried to isolate which design choices actually matter.
