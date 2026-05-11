@@ -49,3 +49,4 @@ tests/results/
 # Agent runtime data
 .transcripts/
 .tasks/
+.playwright-mcp/
