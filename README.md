@@ -6,31 +6,31 @@ Exploring the architecture of coding agents by rebuilding a Claude Code-style CL
 
 ## Learning Series
 
-A complete 9-part learning series is available on [ivanmagda.dev](https://ivanmagda.dev).
+A 9-part learning series covers the build on [ivanmagda.dev](https://ivanmagda.dev).
 
 [Start the series →](https://ivanmagda.dev/posts/s00-bootstrapping-the-project)
 
 ## Why This Exists
 
-Claude Code feels unusually effective compared to other coding agents, and I suspect most of it comes from architectural restraint rather than architectural complexity. I studied the tool surface, traced the interaction loop, and tried to isolate which design choices actually matter.
+Claude Code works better than most coding agents I've used, and I think the reason is restraint. I studied its tool surface and traced its loop to isolate which design choices do the work.
 
-My working theory: **coding agents benefit more from a small set of excellent tools and tight loop design than from large orchestration layers.**
+My working theory: **coding agents benefit more from a small set of excellent tools and a tight loop than from large orchestration layers.**
 
-Claude Code doesn't have many tools. The tools it does have are simple: a search tool, a file editing tool. But those tools are really good. And the system leans on the model far more than most agent implementations — less scaffolding, more trust in the LLM to do the heavy lifting.
+Claude Code ships few tools, and the ones it has are simple: a search tool, a file editor. They work well. The system trusts the model and skips the scaffolding most agents pile on.
 
-This project tests that idea by rebuilding the core mechanics from scratch in Swift, one stage at a time, to see how little architecture you actually need.
+This project rebuilds those mechanics in Swift, one stage at a time, to find out how little architecture the job needs.
 
 ## Hypothesis
 
 This project tests a few specific ideas about coding agents:
 
 - A small number of high-quality tools beats a large tool catalog
-- The model should do most of the heavy lifting — thin orchestration, not thick
+- The model should do the heavy lifting; orchestration stays thin
 - Explicit task state improves reliability more than prompt-only planning
 - Controlled context injection matters more than persistent memory
-- Context compaction is a product feature, not just a token optimization
+- Context compaction is a product feature, not a token optimization
 
-Each stage is designed to isolate one mechanism and see what it enables.
+Each stage isolates one mechanism so I can see what it enables.
 
 ## The Agent Loop
 
@@ -63,13 +63,13 @@ func run(query: String) async throws -> String {
 }
 ```
 
-The loop is the invariant. Tools are the variable. Every stage adds entries to the tool handler dictionary and injection points before the API call, but the loop body itself never changes.
+The loop is fixed; the tools vary. Every stage adds entries to the tool handler dictionary and injection points before the API call, but the loop body itself stays identical.
 
 ## Roadmap
 
-Progress is tracked via git tags. The roadmap is split into two phases — core mechanics first, then product-level features.
+Git tags track progress. The roadmap has two phases: core mechanics first, then product-level features.
 
-### Phase 1 — Core Loop
+### Phase 1: Core Loop
 
 The minimum viable agent: a loop and a small set of good tools.
 
@@ -80,7 +80,7 @@ The minimum viable agent: a loop and a small set of good tools.
 | 02    | Tool dispatch: `read_file`, `write_file`, `edit_file` with path safety | `02-tool-dispatch` |
 | 03    | Todo tracking with nag reminder injection                              | `03-todo-write`    |
 
-### Phase 2 — Product Mechanics
+### Phase 2: Product Mechanics
 
 The features that make an agent feel like a usable product: context, memory management, and persistence.
 
@@ -96,11 +96,11 @@ The features that make an agent feel like a usable product: context, memory mana
 
 Two-target Swift Package Manager project:
 
-**Core** is the library — API client, shell executor, agent loop, tools.
+**Core** is the library: API client, shell executor, agent loop, tools.
 
-**CLI** is just the entry point. The executable is called `agent`.
+**CLI** is the entry point. The executable is named `agent`.
 
-Raw HTTP to `POST https://api.anthropic.com/v1/messages` using [AsyncHTTPClient](https://github.com/swift-server/async-http-client). Works on both macOS and Linux.
+The agent talks to `POST https://api.anthropic.com/v1/messages` over raw HTTP, built on [AsyncHTTPClient](https://github.com/swift-server/async-http-client). It runs on macOS and Linux.
 
 ## Non-Goals
 
@@ -110,7 +110,7 @@ This project is **not**:
 - A general-purpose multi-agent framework
 - Production-ready IDE tooling
 
-It's a staged exploration of coding-agent architecture — intentionally minimal, intentionally incomplete.
+It's a staged exploration of coding-agent architecture. The gaps are deliberate.
 
 ## Tech Stack
 
@@ -135,8 +135,8 @@ swift run agent
 
 ## References
 
-- [Anthropic Messages API](https://docs.anthropic.com/en/api/messages) — the single endpoint the entire agent talks to
-- [Anthropic Tool Use](https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview) — how tool definitions, `tool_use`, and `tool_result` work
+- [Anthropic Messages API](https://docs.anthropic.com/en/api/messages): the one endpoint the agent talks to
+- [Anthropic Tool Use](https://docs.anthropic.com/en/docs/build-with-claude/tool-use/overview): how tool definitions, `tool_use`, and `tool_result` work
 
 ## License
 
