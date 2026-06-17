@@ -4,6 +4,9 @@ demo.tape
 # macOS
 .DS_Store
 
+# JetBrains IDEs
+.idea/
+
 # Xcode
 xcuserdata/
 *.xcodeproj/
