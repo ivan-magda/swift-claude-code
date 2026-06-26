@@ -1,4 +1,4 @@
-# swift-claude-code
+# swift-coding-agent
 
 Exploring the architecture of coding agents by rebuilding a Claude Code-style CLI from scratch in Swift.
 
@@ -122,8 +122,8 @@ It's a staged exploration of coding-agent architecture. The gaps are deliberate.
 ## Getting Started
 
 ```bash
-git clone https://github.com/ivan-magda/swift-claude-code.git
-cd swift-claude-code
+git clone https://github.com/ivan-magda/swift-coding-agent.git
+cd swift-coding-agent
 
 # Set up your API key and model
 cp .env.example .env
