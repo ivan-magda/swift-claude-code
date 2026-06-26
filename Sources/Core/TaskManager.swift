@@ -117,15 +117,20 @@ public final class TaskManager {
         task.blockedBy.append(blockerId)
       }
 
-      guard
-        var blocker = try? load(blockerId),
-        !blocker.blocks.contains(task.id)
-      else {
-        continue
+      // Load blocker task and maintain bidirectional relationship
+      // Throw error if blocker doesn't exist to prevent asymmetric state
+      guard var blocker = try? load(blockerId) else {
+        // Revert the blockedBy addition since blocker doesn't exist
+        if let index = task.blockedBy.firstIndex(of: blockerId) {
+          task.blockedBy.remove(at: index)
+        }
+        throw TaskError.taskNotFound(blockerId)
       }
 
-      blocker.blocks.append(task.id)
-      try? save(blocker)
+      if !blocker.blocks.contains(task.id) {
+        blocker.blocks.append(task.id)
+        try? save(blocker)
+      }
     }
   }
 
@@ -139,14 +144,20 @@ public final class TaskManager {
         task.blocks.append(dependentId)
       }
 
-      guard var dependent = try? load(dependentId),
-        !dependent.blockedBy.contains(task.id)
-      else {
-        continue
+      // Load dependent task and maintain bidirectional relationship
+      // Throw error if dependent doesn't exist to prevent asymmetric state
+      guard var dependent = try? load(dependentId) else {
+        // Revert the blocks addition since dependent doesn't exist
+        if let index = task.blocks.firstIndex(of: dependentId) {
+          task.blocks.remove(at: index)
+        }
+        throw TaskError.taskNotFound(dependentId)
       }
 
-      dependent.blockedBy.append(task.id)
-      try? save(dependent)
+      if !dependent.blockedBy.contains(task.id) {
+        dependent.blockedBy.append(task.id)
+        try? save(dependent)
+      }
     }
   }
 

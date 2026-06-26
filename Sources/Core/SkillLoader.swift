@@ -23,6 +23,15 @@ public struct SkillLoader: Sendable {
 
     let contents = (try? fileManager.contentsOfDirectory(atPath: directory)) ?? []
     for entry in contents {
+      // Validate entry name to prevent path traversal attacks
+      // Reject entries with path separators or parent directory references
+      guard !entry.contains("/"),
+            !entry.contains("\\"),
+            !entry.hasPrefix(".")
+      else {
+        continue
+      }
+
       let skillFile = "\(directory)/\(entry)/SKILL.md"
       guard fileManager.fileExists(atPath: skillFile),
         let text = try? String(contentsOfFile: skillFile, encoding: .utf8)
